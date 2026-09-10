@@ -9,7 +9,6 @@ from sqlalchemy.orm import Session
 from app.database import SessionLocal
 from app.models import ProjectModel
 import svgwrite
-import vitracervtracer # type: ignore
 import vtracer
 
 router = APIRouter()
