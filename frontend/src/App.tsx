@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import './styles.css';
 
-const API_BASE = "http://127.0.0.1:8000/api";
+const API_BASE = "https://sticker-assistant.onrender.com/api";
 
 export default function App() {
   const [file, setFile] = useState<File | null>(null);
