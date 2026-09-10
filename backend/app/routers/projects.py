@@ -66,3 +66,4 @@ async def make_cut_ready(project_id: int, db: Session = Depends(get_db)):
     db.commit()
 
     return {"message": "Cut Ready analysis completed successfully.", "report": checker_report}
+# Force update 2

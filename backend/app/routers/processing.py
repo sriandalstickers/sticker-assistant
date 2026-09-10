@@ -170,3 +170,4 @@ async def export_cdr_guide(project_id: int, db: Session = Depends(get_db)):
         ],
         "svg_source": vector_path
     }
+# Force update 1
