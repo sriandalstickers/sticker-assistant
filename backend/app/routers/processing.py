@@ -5,9 +5,8 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from app.database import SessionLocal
 from app.models import ProjectModel
-import cv2
-import numpy as np
 import svgwrite
+import vtracer
 
 router = APIRouter()
 
@@ -38,70 +37,32 @@ async def trace_image_to_vector(project_id: int, db: Session = Depends(get_db)):
 
     output_svg_path = input_path.rsplit(".", 1)[0] + "_vector.svg"
 
-    img = cv2.imread(input_path)
-    if img is None:
-        raise HTTPException(status_code=400, detail="Could not read working image for tracing.")
-
-    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-    
-    # Gaussian blur to smooth pixel transitions and edge stair-steps
-    blur = cv2.GaussianBlur(gray, (5, 5), 0)
-    _, thresh = cv2.threshold(blur, 180, 255, cv2.THRESH_BINARY_INV)
-
-    contours, hierarchy = cv2.findContours(thresh, cv2.RETR_CCOMP, cv2.CHAIN_APPROX_SIMPLE)
-
-    h, w = gray.shape
-    dwg = svgwrite.Drawing(output_svg_path, profile='tiny', size=(f"{w}px", f"{h}px"))
-    
-    valid_paths_count = 0
-    if hierarchy is not None:
-        hierarchy = hierarchy[0]
-        for i, cnt in enumerate(contours):
-            area = cv2.contourArea(cnt)
-            if area < 15.0 or area > (h * w * 0.95):
-                continue
-            
-            x, y, cw, ch = cv2.boundingRect(cnt)
-            if x <= 2 or y <= 2 or (x + cw) >= w - 2 or (y + ch) >= h - 2:
-                continue
-
-            # Douglas-Peucker Polygon Approximation to smooth out jitter/shake
-            epsilon = 0.0015 * cv2.arcLength(cnt, True)
-            approx_cnt = cv2.approxPolyDP(cnt, epsilon, True)
-
-            # Process top-level outer boundaries
-            if hierarchy[i][3] == -1:
-                path_data = []
-                pts = approx_cnt.reshape(-1, 2)
-                if len(pts) > 2:
-                    path_data.append(f"M {pts[0][0]} {pts[0][1]} " + " ".join([f"L {pt[0]} {pt[1]}" for pt in pts[1:]]) + " Z")
-                    
-                    # Punch out inner child contours (holes, cutouts)
-                    child_idx = hierarchy[i][2]
-                    while child_idx != -1:
-                        child_cnt = contours[child_idx]
-                        child_area = cv2.contourArea(child_cnt)
-                        if child_area > 5.0:
-                            c_epsilon = 0.0015 * cv2.arcLength(child_cnt, True)
-                            c_approx = cv2.approxPolyDP(child_cnt, c_epsilon, True)
-                            c_pts = c_approx.reshape(-1, 2)
-                            
-                            if len(c_pts) > 2:
-                                path_data.append(f"M {c_pts[0][0]} {c_pts[0][1]} " + " ".join([f"L {pt[0]} {pt[1]}" for pt in c_pts[1:]]) + " Z")
-                        child_idx = hierarchy[child_idx][0]
-
-                dwg.add(dwg.path(d=" ".join(path_data), fill="black", fill_rule="evenodd", stroke="none", id=f"shape_{i}"))
-                valid_paths_count += 1
-
-    dwg.save()
+    try:
+        # Professional VTracer Engine - Generates perfect Spline/Bezier curves
+        vtracer.convert_image_to_svg_py(
+            input_path,
+            output_svg_path,
+            colormode='binary',     # Forces pure black and white vinyl output
+            hierarchical='stacked',
+            mode='spline',          # CRITICAL: Uses curves instead of polygons
+            filter_speckle=10,      # Ignores microscopic pixel dust
+            color_precision=8,
+            layer_difference=16,
+            corner_threshold=60,    # Keeps sharp corners sharp (like the A and K)
+            length_threshold=4.0,
+            max_iterations=10,
+            splice_threshold=45,
+            path_precision=3
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"High-fidelity tracing failed: {str(e)}")
 
     project.status = "CLEAN_VECTOR"
     db.commit()
 
     return {
-        "message": f"Successfully vectorized and smoothed {valid_paths_count} precise shapes with zero edge jitter!",
-        "vector_file": output_svg_path,
-        "contours_traced": valid_paths_count
+        "message": "Successfully vectorized using professional Spline/Bézier curves!",
+        "vector_file": output_svg_path
     }
 
 @router.post("/projects/{project_id}/add-text")
