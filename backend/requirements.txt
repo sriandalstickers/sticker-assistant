@@ -1,0 +1,10 @@
+fastapi>=0.112.0
+uvicorn>=0.30.0
+sqlalchemy>=2.0.30
+pydantic>=2.9.0
+python-multipart>=0.0.9
+pillow>=11.0.0
+numpy>=2.1.0
+svgwrite==1.4.3
+opencv-python-headless>=4.10.0
+pytesseract==0.3.10
