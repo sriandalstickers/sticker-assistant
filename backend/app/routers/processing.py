@@ -1,6 +1,7 @@
 import os
 import cv2
 import numpy as np
+from PIL import Image
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
@@ -30,52 +31,66 @@ async def trace_image_to_vector(project_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Project not found.")
 
     input_path = project.current_filepath
-
-    if input_path.lower().endswith('.cdr'):
-        raise HTTPException(
-            status_code=400,
-            detail="CorelDRAW (.cdr) is a proprietary vector format. Please export a PNG, JPEG, or PDF preview from CorelDRAW to use the raster-to-vector tracing engine."
-        )
-
     output_svg_path = input_path.rsplit(".", 1)[0] + "_vector.svg"
     temp_bw_path = input_path.rsplit(".", 1)[0] + "_temp_bw.jpg"
+    
+    ext = input_path.lower().split('.')[-1]
+    vector_formats = ['cdr', 'pdf', 'ai', 'eps', 'svg']
+
+    # 1. SMART BYPASS: If the file is already a vector, skip tracing and return success
+    if ext in vector_formats:
+        dwg = svgwrite.Drawing(output_svg_path, profile='tiny', size=("800px", "600px"))
+        dwg.add(dwg.text(f"File uploaded is a .{ext.upper()} vector format.", insert=(50, 100), fill="black", font_size="24px"))
+        dwg.add(dwg.text("Raster-to-vector tracing is not required.", insert=(50, 150), fill="black", font_size="18px"))
+        dwg.add(dwg.text("Please use the downloaded original file directly.", insert=(50, 200), fill="black", font_size="18px"))
+        dwg.save()
+
+        project.status = "CLEAN_VECTOR"
+        db.commit()
+
+        return {
+            "message": f"Detected .{ext.upper()} file. Bypassed tracing since it is already a vector format.",
+            "vector_file": output_svg_path
+        }
 
     try:
-        # 1. Read the image
+        # 2. UNIVERSAL IMAGE LOADER: Handles JPG, PNG, WEBP, BMP, TIFF, etc.
         img = cv2.imread(input_path)
-        
-        # 2. MASSIVE UPSCALING (400%)
-        # Gives the tracing engine sub-pixel accuracy to stop it from tracing jagged squares
+        if img is None:
+            # Fallback to Pillow if OpenCV cannot read the specific image extension
+            pil_img = Image.open(input_path).convert('RGB')
+            img = np.array(pil_img)
+            img = img[:, :, ::-1].copy() # Convert RGB to BGR for OpenCV
+
+        # 3. MASSIVE UPSCALING (400%)
         img_upscaled = cv2.resize(img, None, fx=4, fy=4, interpolation=cv2.INTER_CUBIC)
         
-        # 3. Convert to Grayscale
+        # 4. Convert to Grayscale & Blur
         gray = cv2.cvtColor(img_upscaled, cv2.COLOR_BGR2GRAY)
-        
-        # 4. Blur to melt the jagged JPEG compression artifacts together
         blur = cv2.GaussianBlur(gray, (5, 5), 0)
         
         # 5. Threshold to solid black and white
         _, thresh = cv2.threshold(blur, 200, 255, cv2.THRESH_BINARY)
         
-        # 6. Morphological ironing (closes microscopic gaps and smooths outer edges)
+        # 6. Morphological ironing
         kernel = np.ones((3, 3), np.uint8)
         thresh = cv2.morphologyEx(thresh, cv2.MORPH_CLOSE, kernel)
         thresh = cv2.morphologyEx(thresh, cv2.MORPH_OPEN, kernel)
         
         cv2.imwrite(temp_bw_path, thresh)
 
-        # Professional VTracer Engine tuned for upscaled, smooth geometry
+        # Professional VTracer Engine
         vtracer.convert_image_to_svg_py(
             temp_bw_path,
             output_svg_path,
             colormode='binary',     
             hierarchical='stacked',
             mode='spline',          
-            filter_speckle=20,      # Increased to ignore larger dust in the 4x image
+            filter_speckle=20,      
             color_precision=8,
             layer_difference=16,
-            corner_threshold=45,    # Adjusted to allow curves to flow smoothly
-            length_threshold=10.0,  # Prevents tiny, jittery micro-nodes
+            corner_threshold=45,    
+            length_threshold=10.0,  
             max_iterations=10,
             splice_threshold=45,
             path_precision=3
@@ -85,13 +100,13 @@ async def trace_image_to_vector(project_id: int, db: Session = Depends(get_db)):
             os.remove(temp_bw_path)
 
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"High-fidelity tracing failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Tracing failed: {str(e)}")
 
     project.status = "CLEAN_VECTOR"
     db.commit()
 
     return {
-        "message": "Successfully applied 400% upscale smoothing and vectorized for safe plotter cutting!",
+        "message": "Successfully applied 400% upscale smoothing and vectorized for plotter cutting!",
         "vector_file": output_svg_path
     }
 
@@ -131,12 +146,7 @@ async def export_svg(project_id: int, db: Session = Depends(get_db)):
     vector_path = project.current_filepath.rsplit(".", 1)[0] + "_vector.svg"
     
     if not os.path.exists(vector_path):
-        if project.current_filepath.lower().endswith('.cdr'):
-            dwg = svgwrite.Drawing(vector_path, profile='tiny', size=("800px", "600px"))
-            dwg.add(dwg.text("CorelDRAW Native Vector Import", insert=(50, 100), fill="black", font_size="24px"))
-            dwg.save()
-        else:
-            raise HTTPException(status_code=400, detail="Vector file not found. Please run 'Trace Raster to Clean Vector' first.")
+        raise HTTPException(status_code=400, detail="Vector file not found. Please run 'Trace Raster to Clean Vector' first.")
     
     return FileResponse(vector_path, media_type="image/svg+xml", filename=f"sticker_{project.id}_cut_ready.svg")
 

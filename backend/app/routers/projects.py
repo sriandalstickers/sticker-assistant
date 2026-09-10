@@ -2,8 +2,8 @@ import os
 import shutil
 from fastapi import APIRouter, Depends, File, UploadFile, HTTPException
 from sqlalchemy.orm import Session
-from ..database import SessionLocal
-from ..models import ProjectModel
+from app.database import SessionLocal
+from app.models import ProjectModel
 
 router = APIRouter()
 
@@ -22,10 +22,7 @@ def get_db():
 
 @router.post("/projects/upload")
 async def upload_artwork(file: UploadFile = File(...), db: Session = Depends(get_db)):
-    allowed_extensions = (".pdf", ".cdr", ".jpg", ".jpeg", ".png")
-    if not file.filename.lower().endswith(allowed_extensions):
-        raise HTTPException(status_code=400, detail="Unsupported file format.")
-
+    # ACCEPT ALL TYPES OF FILES: No extension blocking.
     original_path = os.path.join(ORIGINAL_DIR, file.filename)
     working_path = os.path.join(WORKING_DIR, f"working_{file.filename}")
 
@@ -54,7 +51,6 @@ async def make_cut_ready(project_id: int, db: Session = Depends(get_db)):
     if not project:
         raise HTTPException(status_code=404, detail="Project not found.")
 
-    # Core "MAKE CUT READY" Production Pipeline Simulation / Inspection Check
     checker_report = {
         "text_converted_to_curves": "WARNING: Verify text elements are converted to outlines.",
         "paths_closed": "PASS: Primary contour paths are closed correctly.",
