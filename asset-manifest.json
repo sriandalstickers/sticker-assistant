@@ -1,0 +1,13 @@
+{
+  "files": {
+    "main.css": "/sticker-assistant/static/css/main.acd1b850.css",
+    "main.js": "/sticker-assistant/static/js/main.b95589b4.js",
+    "index.html": "/sticker-assistant/index.html",
+    "main.acd1b850.css.map": "/sticker-assistant/static/css/main.acd1b850.css.map",
+    "main.b95589b4.js.map": "/sticker-assistant/static/js/main.b95589b4.js.map"
+  },
+  "entrypoints": [
+    "static/css/main.acd1b850.css",
+    "static/js/main.b95589b4.js"
+  ]
+}
