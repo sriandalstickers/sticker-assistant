@@ -5,6 +5,7 @@ const API_BASE = "https://sticker-assistant.onrender.com/api";
 
 export default function App() {
   const [file, setFile] = useState<File | null>(null);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [projectId, setProjectId] = useState<number | null>(null);
   const [uploadStatus, setUploadStatus] = useState<string>("");
   const [checkerReport, setCheckerReport] = useState<any>(null);
@@ -14,11 +15,19 @@ export default function App() {
   const [fontSize, setFontSize] = useState<number>(48);
   const [widthMm, setWidthMm] = useState<number>(100);
   const [heightMm, setHeightMm] = useState<number>(100);
+  
+  // Loading states
   const [loading, setLoading] = useState<boolean>(false);
+  const [loadingMessage, setLoadingMessage] = useState<string>("");
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
-      setFile(e.target.files[0]);
+      const selectedFile = e.target.files[0];
+      setFile(selectedFile);
+      setPreviewUrl(URL.createObjectURL(selectedFile));
+      setTraceResult(null);
+      setCheckerReport(null);
+      setCdrGuide(null);
     }
   };
 
@@ -30,6 +39,7 @@ export default function App() {
     formData.append("file", file);
 
     setLoading(true);
+    setLoadingMessage("Uploading artwork and locking original safely...");
     try {
       const response = await fetch(`${API_BASE}/projects/upload`, {
         method: "POST",
@@ -37,7 +47,7 @@ export default function App() {
       });
       const data = await response.json();
       if (response.ok) {
-        setProjectId(data.project_id);
+        setProjectId(data.project_id || data.id);
         setUploadStatus("Artwork uploaded successfully. Original preserved!");
       } else {
         setUploadStatus(`Error: ${data.detail}`);
@@ -46,12 +56,14 @@ export default function App() {
       setUploadStatus("Failed to connect to backend server.");
     }
     setLoading(false);
+    setLoadingMessage("");
   };
 
   const handleMakeCutReady = async () => {
     if (!projectId) return;
 
     setLoading(true);
+    setLoadingMessage("Analyzing geometry for cutter safety...");
     try {
       const response = await fetch(`${API_BASE}/projects/${projectId}/make-cut-ready`, {
         method: "POST",
@@ -66,12 +78,14 @@ export default function App() {
       alert("Failed to execute Cut Ready pipeline.");
     }
     setLoading(false);
+    setLoadingMessage("");
   };
 
   const handleTraceVector = async () => {
     if (!projectId) return;
 
     setLoading(true);
+    setLoadingMessage("Applying advanced upscaling & generating blade-safe curves...");
     try {
       const response = await fetch(`${API_BASE}/projects/${projectId}/trace`, {
         method: "POST",
@@ -83,15 +97,17 @@ export default function App() {
         alert(`Error: ${data.detail}`);
       }
     } catch (err) {
-      alert("Failed to trace raster into vector. Note: CDR files require a PNG/JPEG preview export for tracing.");
+      alert("Failed to trace raster into vector. Note: CDR files are bypassed safely.");
     }
     setLoading(false);
+    setLoadingMessage("");
   };
 
   const handleAddTextVector = async () => {
     if (!projectId) return;
 
     setLoading(true);
+    setLoadingMessage("Generating custom vector text paths...");
     try {
       const response = await fetch(`${API_BASE}/projects/${projectId}/add-text`, {
         method: "POST",
@@ -108,6 +124,7 @@ export default function App() {
       alert("Failed to generate vector text.");
     }
     setLoading(false);
+    setLoadingMessage("");
   };
 
   const handleCdrWorkflow = async () => {
@@ -127,7 +144,20 @@ export default function App() {
   };
 
   return (
-    <div className="container">
+    <div className="container relative">
+      {/* GLOBAL LOADING SPINNER OVERLAY */}
+      {loading && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex flex-col items-center justify-center">
+          <div className="w-16 h-16 border-4 border-cyan-500 border-t-transparent rounded-full animate-spin mb-4"></div>
+          <p className="text-lg font-semibold tracking-wide text-cyan-300 animate-pulse">
+            {loadingMessage}
+          </p>
+          <p className="text-xs text-neutral-400 mt-2">
+            Ensuring absolute plotter accuracy and protecting your blade...
+          </p>
+        </div>
+      )}
+
       <header className="header">
         <h1>Sticker & Vinyl Cutting Assistant</h1>
         <p>Private Production Workshop for CorelDRAW & Vinyl Plotters</p>
@@ -138,9 +168,9 @@ export default function App() {
         <div className="panel control-panel">
           <h2>1. Upload Artwork</h2>
           <form onSubmit={handleUpload}>
-            <input type="file" onChange={handleFileChange} accept=".pdf,.cdr,.jpg,.jpeg,.png" />
+            <input type="file" onChange={handleFileChange} accept=".pdf,.cdr,.jpg,.jpeg,.png,.webp,.svg" />
             <button type="submit" disabled={!file || loading} className="btn-secondary">
-              {loading ? "Processing..." : "Upload & Lock Original"}
+              Upload & Lock Original
             </button>
           </form>
           {uploadStatus && <p className="status-msg">{uploadStatus}</p>}
@@ -162,11 +192,11 @@ export default function App() {
 
               <hr />
               <h2>3. Production Engine</h2>
-              <button onClick={handleMakeCutReady} className="btn-primary-cut">
+              <button onClick={handleMakeCutReady} disabled={loading} className="btn-primary-cut">
                 🚀 MAKE CUT READY
               </button>
 
-              <button onClick={handleTraceVector} className="btn-secondary" style={{ marginTop: '10px' }}>
+              <button onClick={handleTraceVector} disabled={loading} className="btn-secondary" style={{ marginTop: '10px' }}>
                 ✏️ Trace Raster to Clean Vector (SVG)
               </button>
 
@@ -188,7 +218,7 @@ export default function App() {
                     style={{ width: '60px', marginLeft: '8px', padding: '4px', background: '#111', color: '#fff', border: '1px solid #444' }}
                   />
                 </label>
-                <button onClick={handleAddTextVector} className="btn-secondary" style={{ width: '100%', marginTop: '6px', background: '#e91e63', color: '#fff' }}>
+                <button onClick={handleAddTextVector} disabled={loading} className="btn-secondary" style={{ width: '100%', marginTop: '6px', background: '#e91e63', color: '#fff' }}>
                   ✍️ Generate Text Vector
                 </button>
               </div>
@@ -214,12 +244,17 @@ export default function App() {
         {/* Right Panel: Preview & Cut Ready Checker */}
         <div className="panel preview-panel">
           <h2>Live Production Preview</h2>
-          <div className="preview-canvas">
-            {file ? (
-              <div className="file-info">
-                <p><strong>Loaded File:</strong> {file.name}</p>
+          <div className="preview-canvas" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '250px' }}>
+            {previewUrl ? (
+              <div style={{ textAlign: 'center', width: '100%' }}>
+                <img 
+                  src={previewUrl} 
+                  alt="Artwork Preview" 
+                  style={{ maxHeight: '220px', maxWidth: '100%', objectFit: 'contain', border: '1px solid #444', borderRadius: '4px', marginBottom: '10px', background: '#111' }} 
+                />
+                <p><strong>Loaded File:</strong> {file?.name}</p>
                 <p><strong>Dimensions:</strong> {widthMm} mm × {heightMm} mm</p>
-                <p className="secure-badge">🔒 Original preserved securely on disk</p>
+                <p className="secure-badge" style={{ color: '#4caf50', fontSize: '0.85rem', marginTop: '4px' }}>🔒 Original preserved securely on disk</p>
               </div>
             ) : (
               <p className="placeholder-text">No artwork loaded. Upload a file to begin.</p>
