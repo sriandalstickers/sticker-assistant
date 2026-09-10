@@ -43,7 +43,12 @@ async def upload_artwork(file: UploadFile = File(...), db: Session = Depends(get
     db.commit()
     db.refresh(db_project)
 
-    return {"message": "Artwork uploaded successfully. Original file preserved.", "project_id": db_project.id}
+    # FIXED: Ensure the frontend can read the ID regardless of which key it expects
+    return {
+        "message": "Artwork uploaded successfully. Original file preserved.", 
+        "id": db_project.id,
+        "project_id": db_project.id
+    }
 
 @router.post("/projects/{project_id}/make-cut-ready")
 async def make_cut_ready(project_id: int, db: Session = Depends(get_db)):
@@ -66,4 +71,3 @@ async def make_cut_ready(project_id: int, db: Session = Depends(get_db)):
     db.commit()
 
     return {"message": "Cut Ready analysis completed successfully.", "report": checker_report}
-# Force update 2
