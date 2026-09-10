@@ -37,7 +37,7 @@ async def trace_image_to_vector(project_id: int, db: Session = Depends(get_db)):
     ext = input_path.lower().split('.')[-1]
     vector_formats = ['cdr', 'pdf', 'ai', 'eps', 'svg']
 
-    # 1. SMART BYPASS: If the file is already a vector, skip tracing and return success
+    # 1. SMART BYPASS: Skip already-vector files
     if ext in vector_formats:
         dwg = svgwrite.Drawing(output_svg_path, profile='tiny', size=("800px", "600px"))
         dwg.add(dwg.text(f"File uploaded is a .{ext.upper()} vector format.", insert=(50, 100), fill="black", font_size="24px"))
@@ -54,19 +54,26 @@ async def trace_image_to_vector(project_id: int, db: Session = Depends(get_db)):
         }
 
     try:
-        # 2. UNIVERSAL IMAGE LOADER: Handles JPG, PNG, WEBP, BMP, TIFF, etc.
+        # 2. UNIVERSAL IMAGE LOADER
         img = cv2.imread(input_path)
         if img is None:
-            # Fallback to Pillow if OpenCV cannot read the specific image extension
             pil_img = Image.open(input_path).convert('RGB')
             img = np.array(pil_img)
-            img = img[:, :, ::-1].copy() # Convert RGB to BGR for OpenCV
+            img = img[:, :, ::-1].copy()
 
-        # 3. MASSIVE UPSCALING (400%)
-        img_upscaled = cv2.resize(img, None, fx=4, fy=4, interpolation=cv2.INTER_CUBIC)
+        # 3. SMART SCALING (Fixes the 502 Bad Gateway Crash)
+        # Scales the longest edge to exactly 1800px. High enough for smooth cuts, safe for 512MB RAM.
+        h, w = img.shape[:2]
+        target_max = 1800.0
+        scale = target_max / max(h, w)
         
-        # 4. Convert to Grayscale & Blur
-        gray = cv2.cvtColor(img_upscaled, cv2.COLOR_BGR2GRAY)
+        if scale > 1:
+            img_working = cv2.resize(img, None, fx=scale, fy=scale, interpolation=cv2.INTER_CUBIC)
+        else:
+            img_working = cv2.resize(img, None, fx=scale, fy=scale, interpolation=cv2.INTER_AREA)
+        
+        # 4. Convert to Grayscale & Blur for smooth geometry
+        gray = cv2.cvtColor(img_working, cv2.COLOR_BGR2GRAY)
         blur = cv2.GaussianBlur(gray, (5, 5), 0)
         
         # 5. Threshold to solid black and white
@@ -79,7 +86,7 @@ async def trace_image_to_vector(project_id: int, db: Session = Depends(get_db)):
         
         cv2.imwrite(temp_bw_path, thresh)
 
-        # Professional VTracer Engine
+        # 7. VTracer Engine
         vtracer.convert_image_to_svg_py(
             temp_bw_path,
             output_svg_path,
@@ -106,7 +113,7 @@ async def trace_image_to_vector(project_id: int, db: Session = Depends(get_db)):
     db.commit()
 
     return {
-        "message": "Successfully applied 400% upscale smoothing and vectorized for plotter cutting!",
+        "message": "Successfully applied smart smoothing and vectorized for plotter cutting!",
         "vector_file": output_svg_path
     }
 
@@ -170,4 +177,3 @@ async def export_cdr_guide(project_id: int, db: Session = Depends(get_db)):
         ],
         "svg_source": vector_path
     }
-# Force update 1
