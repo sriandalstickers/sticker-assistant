@@ -53,9 +53,9 @@ async def trace_image_to_vector(project_id: int, db: Session = Depends(get_db)):
             img = np.array(pil_img)
             img = img[:, :, ::-1].copy()
 
-        # 2. High-Resolution Scaling for Blade Precision
+        # 2. Maximum Resolution Scaling
         h, w = img.shape[:2]
-        target_max = 2400.0
+        target_max = 3000.0  # Increased for maximum pixel density
         scale = target_max / max(h, w)
         
         if scale > 1:
@@ -63,33 +63,33 @@ async def trace_image_to_vector(project_id: int, db: Session = Depends(get_db)):
         else:
             img_working = cv2.resize(img, None, fx=scale, fy=scale, interpolation=cv2.INTER_AREA)
         
-        # 3. Grayscale & Adaptive Thresholding
+        # 3. Grayscale & Hard Binarization (NO BLURRING)
+        # We removed the GaussianBlur so razor-thin speed lines remain perfectly intact
         gray = cv2.cvtColor(img_working, cv2.COLOR_BGR2GRAY)
-        blur = cv2.GaussianBlur(gray, (3, 3), 0)
-        _, thresh = cv2.threshold(blur, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+        _, thresh = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
         
-        # 4. Auto-Invert Background for Plotter Safety
+        # 4. Auto-Invert Background
         corners = [int(thresh[0,0]), int(thresh[0,-1]), int(thresh[-1,0]), int(thresh[-1,-1])]
         if sum(corners) < 510:
             thresh = cv2.bitwise_not(thresh)
             
         cv2.imwrite(temp_bw_path, thresh)
 
-        # 5. Ultra-Clean VTracer Engine (Optimized to eliminate jagged node clusters)
+        # 5. Ultra-Clean VTracer Engine (Tuned for Micro-Geometry & Straight Lines)
         vtracer.convert_image_to_svg_py(
             temp_bw_path,
             output_svg_path,
             colormode='binary',     
             hierarchical='stacked',
             mode='spline',          
-            filter_speckle=6,       
+            filter_speckle=1,       # Dropped to 1 to never delete thin speed lines
             color_precision=8,
             layer_difference=16,
-            corner_threshold=70,    # High corner threshold locks straight edges flat
-            length_threshold=5.0,   # Eliminates microscopic line fragments that break blades
-            max_iterations=12,
-            splice_threshold=50,
-            path_precision=6
+            corner_threshold=90,    # Cranked to 90 to force sharp, straight geometric corners
+            length_threshold=1.0,   # Captures every tiny detail without generalizing
+            max_iterations=10,
+            splice_threshold=10,    # Lowered to stop lines from merging incorrectly
+            path_precision=8
         )
         
         if os.path.exists(temp_bw_path):
@@ -136,7 +136,7 @@ async def export_svg(project_id: int, db: Session = Depends(get_db)):
 async def export_cdr_guide(project_id: int, db: Session = Depends(get_db)):
     project = db.query(ProjectModel).filter(ProjectModel.id == project_id).first()
     if not project:
-        raise HTTPException(status_no=404, detail="Project not found.")
+        raise HTTPException(status_code=404, detail="Project not found.")
     vector_path = project.current_filepath.rsplit(".", 1)[0] + "_vector.svg"
     
     return {
