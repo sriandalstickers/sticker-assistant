@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 from app.database import SessionLocal
 from app.models import ProjectModel
 import svgwrite
+import vitracervtracer # type: ignore
 import vtracer
 
 router = APIRouter()
@@ -37,7 +38,6 @@ async def trace_image_to_vector(project_id: int, db: Session = Depends(get_db)):
     ext = input_path.lower().split('.')[-1]
     vector_formats = ['cdr', 'pdf', 'ai', 'eps', 'svg']
 
-    # 1. SMART BYPASS
     if ext in vector_formats:
         dwg = svgwrite.Drawing(output_svg_path, profile='tiny', size=("800px", "600px"))
         dwg.add(dwg.text(f"File uploaded is a .{ext.upper()} vector format.", insert=(50, 100), fill="black", font_size="24px"))
@@ -47,16 +47,16 @@ async def trace_image_to_vector(project_id: int, db: Session = Depends(get_db)):
         return {"message": "Bypassed vector tracing.", "vector_file": output_svg_path}
 
     try:
-        # 2. UNIVERSAL IMAGE LOADER
+        # 1. Universal Image Loader
         img = cv2.imread(input_path)
         if img is None:
             pil_img = Image.open(input_path).convert('RGB')
             img = np.array(pil_img)
             img = img[:, :, ::-1].copy()
 
-        # 3. HIGH-FIDELITY LANCZOS SCALING (Preserves crisp text edges without crashing RAM)
+        # 2. High-Resolution Scaling for Blade Precision
         h, w = img.shape[:2]
-        target_max = 2000.0
+        target_max = 2400.0
         scale = target_max / max(h, w)
         
         if scale > 1:
@@ -64,38 +64,33 @@ async def trace_image_to_vector(project_id: int, db: Session = Depends(get_db)):
         else:
             img_working = cv2.resize(img, None, fx=scale, fy=scale, interpolation=cv2.INTER_AREA)
         
-        # 4. GRAYSCALE & MICRO-BLUR (Only removes dust, protects small text)
+        # 3. Grayscale & Adaptive Thresholding
         gray = cv2.cvtColor(img_working, cv2.COLOR_BGR2GRAY)
         blur = cv2.GaussianBlur(gray, (3, 3), 0)
-        
-        # 5. OTSU'S ADAPTIVE BINARIZATION (Calculates perfect mathematical threshold instead of guessing)
         _, thresh = cv2.threshold(blur, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
         
-        # 6. AUTO-INVERT BACKGROUND (Plotters need black paths on white backgrounds)
-        # Checks the 4 corners. If the corners are black, it inverts the image so the artwork becomes black.
+        # 4. Auto-Invert Background for Plotter Safety
         corners = [int(thresh[0,0]), int(thresh[0,-1]), int(thresh[-1,0]), int(thresh[-1,-1])]
         if sum(corners) < 510:
             thresh = cv2.bitwise_not(thresh)
             
-        # NOTE: Aggressive morphological ironing (cv2.morphologyEx) has been REMOVED to save your typography.
-        
         cv2.imwrite(temp_bw_path, thresh)
 
-        # 7. PRECISION VTRACER ENGINE (Tuned for Typography & Sharp Geometry)
+        # 5. Ultra-Clean VTracer Engine (Optimized to eliminate jagged node clusters)
         vtracer.convert_image_to_svg_py(
             temp_bw_path,
             output_svg_path,
             colormode='binary',     
             hierarchical='stacked',
             mode='spline',          
-            filter_speckle=4,       # Dropped to 4 so it stops deleting the dots on 'i' and small letters
+            filter_speckle=6,       
             color_precision=8,
             layer_difference=16,
-            corner_threshold=60,    # Increased to keep letters like 'A', 'M', 'N' perfectly sharp
-            length_threshold=3.0,   # Dropped to allow tight, accurate curves on small text
-            max_iterations=10,
-            splice_threshold=45,
-            path_precision=8        # Maximum mathematical precision for the plotter blade
+            corner_threshold=70,    # High corner threshold locks straight edges flat
+            length_threshold=5.0,   # Eliminates microscopic line fragments that break blades
+            max_iterations=12,
+            splice_threshold=50,
+            path_precision=6
         )
         
         if os.path.exists(temp_bw_path):
@@ -108,7 +103,7 @@ async def trace_image_to_vector(project_id: int, db: Session = Depends(get_db)):
     db.commit()
 
     return {
-        "message": "Successfully traced with 1:1 typography precision!",
+        "message": "Successfully generated blade-safe ultra-precise vector curves!",
         "vector_file": output_svg_path
     }
 
@@ -142,7 +137,7 @@ async def export_svg(project_id: int, db: Session = Depends(get_db)):
 async def export_cdr_guide(project_id: int, db: Session = Depends(get_db)):
     project = db.query(ProjectModel).filter(ProjectModel.id == project_id).first()
     if not project:
-        raise HTTPException(status_code=404, detail="Project not found.")
+        raise HTTPException(status_no=404, detail="Project not found.")
     vector_path = project.current_filepath.rsplit(".", 1)[0] + "_vector.svg"
     
     return {
