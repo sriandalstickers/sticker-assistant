@@ -147,7 +147,7 @@ export default function App() {
     <div className="container relative">
       {/* GLOBAL LOADING SPINNER OVERLAY */}
       {loading && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex flex-col items-center justify-center">
+        <div className="fixed inset-0 bg-black/85 backdrop-blur-md z-50 flex flex-col items-center justify-center">
           <div className="w-16 h-16 border-4 border-cyan-500 border-t-transparent rounded-full animate-spin mb-4"></div>
           <p className="text-lg font-semibold tracking-wide text-cyan-300 animate-pulse">
             {loadingMessage}
@@ -244,20 +244,20 @@ export default function App() {
         {/* Right Panel: Preview & Cut Ready Checker */}
         <div className="panel preview-panel">
           <h2>Live Production Preview</h2>
-          <div className="preview-canvas" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '250px' }}>
+          <div className="preview-canvas" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '260px' }}>
             {previewUrl ? (
               <div style={{ textAlign: 'center', width: '100%' }}>
                 <img 
                   src={previewUrl} 
-                  alt="Artwork Preview" 
-                  style={{ maxHeight: '220px', maxWidth: '100%', objectFit: 'contain', border: '1px solid #444', borderRadius: '4px', marginBottom: '10px', background: '#111' }} 
+                  alt="Proof Preview" 
+                  style={{ maxHeight: '200px', maxWidth: '100%', objectFit: 'contain', border: '2px solid #00bcd4', borderRadius: '6px', marginBottom: '10px', background: '#111', padding: '4px' }} 
                 />
-                <p><strong>Loaded File:</strong> {file?.name}</p>
-                <p><strong>Dimensions:</strong> {widthMm} mm × {heightMm} mm</p>
-                <p className="secure-badge" style={{ color: '#4caf50', fontSize: '0.85rem', marginTop: '4px' }}>🔒 Original preserved securely on disk</p>
+                <p style={{ fontSize: '0.9rem', color: '#fff' }}><strong>File:</strong> {file?.name}</p>
+                <p style={{ fontSize: '0.85rem', color: '#aaa' }}><strong>Dimensions:</strong> {widthMm} mm × {heightMm} mm</p>
+                <p className="secure-badge" style={{ color: '#4caf50', fontSize: '0.8rem', marginTop: '4px' }}>🔒 Original preserved securely on disk</p>
               </div>
             ) : (
-              <p className="placeholder-text">No artwork loaded. Upload a file to begin.</p>
+              <p className="placeholder-text">No artwork loaded. Upload a file to view proof.</p>
             )}
           </div>
 
