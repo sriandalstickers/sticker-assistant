@@ -1,4 +1,5 @@
 import os
+import cv2
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
@@ -36,24 +37,38 @@ async def trace_image_to_vector(project_id: int, db: Session = Depends(get_db)):
         )
 
     output_svg_path = input_path.rsplit(".", 1)[0] + "_vector.svg"
+    temp_bw_path = input_path.rsplit(".", 1)[0] + "_temp_bw.jpg"
 
     try:
+        # Pre-process: Crush all colors (like red) into pure solid black
+        img = cv2.imread(input_path)
+        gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+        
+        # Anything darker than very light gray (220) becomes solid black
+        _, thresh = cv2.threshold(gray, 220, 255, cv2.THRESH_BINARY)
+        cv2.imwrite(temp_bw_path, thresh)
+
         # Professional VTracer Engine - Generates perfect Spline/Bezier curves
         vtracer.convert_image_to_svg_py(
-            input_path,
+            temp_bw_path,
             output_svg_path,
-            colormode='binary',     # Forces pure black and white vinyl output
+            colormode='binary',     
             hierarchical='stacked',
-            mode='spline',          # CRITICAL: Uses curves instead of polygons
-            filter_speckle=10,      # Ignores microscopic pixel dust
+            mode='spline',          
+            filter_speckle=10,      
             color_precision=8,
             layer_difference=16,
-            corner_threshold=60,    # Keeps sharp corners sharp (like the A and K)
+            corner_threshold=60,    
             length_threshold=4.0,
             max_iterations=10,
             splice_threshold=45,
             path_precision=3
         )
+        
+        # Clean up the temporary black and white processing image
+        if os.path.exists(temp_bw_path):
+            os.remove(temp_bw_path)
+
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"High-fidelity tracing failed: {str(e)}")
 
@@ -61,7 +76,7 @@ async def trace_image_to_vector(project_id: int, db: Session = Depends(get_db)):
     db.commit()
 
     return {
-        "message": "Successfully vectorized using professional Spline/Bézier curves!",
+        "message": "Successfully converted all colors and vectorized using professional Bézier curves!",
         "vector_file": output_svg_path
     }
 
