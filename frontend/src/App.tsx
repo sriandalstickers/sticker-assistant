@@ -245,14 +245,22 @@ export default function App() {
         <div className="panel preview-panel">
           <h2>Live Production Preview</h2>
           <div className="preview-canvas" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '260px' }}>
-            {previewUrl ? (
+            {file ? (
               <div style={{ textAlign: 'center', width: '100%' }}>
-                <img 
-                  src={previewUrl} 
-                  alt="Proof Preview" 
-                  style={{ maxHeight: '200px', maxWidth: '100%', objectFit: 'contain', border: '2px solid #00bcd4', borderRadius: '6px', marginBottom: '10px', background: '#111', padding: '4px' }} 
-                />
-                <p style={{ fontSize: '0.9rem', color: '#fff' }}><strong>File:</strong> {file?.name}</p>
+                {previewUrl && (file.type.startsWith('image/') || file.name.match(/\.(jpg|jpeg|png|webp|gif)$/i)) ? (
+                  <img 
+                    src={previewUrl} 
+                    alt="Proof Preview" 
+                    style={{ maxHeight: '200px', maxWidth: '100%', objectFit: 'contain', border: '2px solid #00bcd4', borderRadius: '6px', marginBottom: '10px', background: '#111', padding: '4px' }} 
+                  />
+                ) : (
+                  <div style={{ padding: '20px', background: '#1a1a1a', border: '2px dashed #ff9800', borderRadius: '6px', marginBottom: '10px' }}>
+                    <span style={{ fontSize: '2rem' }}>📄</span>
+                    <p style={{ color: '#ff9800', fontWeight: 'bold', marginTop: '6px' }}>Vector / Document File Loaded</p>
+                    <p style={{ fontSize: '0.8rem', color: '#aaa' }}>Direct raster preview not available for vector binaries.</p>
+                  </div>
+                )}
+                <p style={{ fontSize: '0.9rem', color: '#fff' }}><strong>File:</strong> {file.name}</p>
                 <p style={{ fontSize: '0.85rem', color: '#aaa' }}><strong>Dimensions:</strong> {widthMm} mm × {heightMm} mm</p>
                 <p className="secure-badge" style={{ color: '#4caf50', fontSize: '0.8rem', marginTop: '4px' }}>🔒 Original preserved securely on disk</p>
               </div>
